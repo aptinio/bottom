@@ -37,9 +37,12 @@ impl Painter {
             );
 
             let y_max = widget_state.graph.y_max(points.values(), times);
-            let (adjusted_y_max, y_labels) =
-                adjust_temp_data_point(y_max, widget_state.max_temp, &app_state.app_config_fields);
-            let y_bounds = AxisBound::Max(adjusted_y_max);
+            let (y_bounds, y_labels) = adjust_temp_data_point(
+                y_max,
+                widget_state.min_temp,
+                widget_state.max_temp,
+                &app_state.app_config_fields,
+            );
 
             // Hide the legend if the width is 90% of the total widget width
             // or the height is greater than 50% of the total widget height.
@@ -108,34 +111,36 @@ impl Painter {
     }
 }
 
-/// Returns the required labels.
+/// Returns the required bounds and labels.
 fn adjust_temp_data_point(
-    max_entry: f64, upper_limit: Option<f32>, config: &AppConfigFields,
-) -> (f64, [String; 3]) {
+    max_entry: f64, min_temp: Option<f64>, max_temp: Option<f64>, config: &AppConfigFields,
+) -> (AxisBound, [String; 3]) {
     let default_upper: f64 = config
         .temperature_type
         .convert_temp_unit_float(100.0)
         .into();
     let unit = config.temperature_type.unit();
+    let min_entry = min_temp.unwrap_or(0.0);
 
-    let max_entry = if let Some(limit) = upper_limit {
-        limit as f64
-    } else if max_entry < default_upper {
-        default_upper
-    } else {
-        max_entry
-    };
+    let max_entry = max_temp.unwrap_or_else(|| {
+        let adaptive_max = max_entry.max(default_upper);
+        adaptive_max.max(min_entry + 1.0)
+    });
 
-    let halfway_label = (max_entry / 2.0).ceil() as u32;
-    let max_entry_label = max_entry.ceil() as u32;
-
+    let halfway = min_entry + (max_entry - min_entry) / 2.0;
     let labels = [
-        format!("0{unit}"),
-        format!("{halfway_label}{unit}"),
-        format!("{max_entry_label}{unit}"),
+        format!("{:.0}{unit}", min_entry.floor()),
+        format!("{:.0}{unit}", halfway.ceil()),
+        format!("{:.0}{unit}", max_entry.ceil()),
     ];
 
-    (max_entry, labels)
+    let bounds = if min_temp.is_some() {
+        AxisBound::Range(min_entry, max_entry)
+    } else {
+        AxisBound::Max(max_entry)
+    };
+
+    (bounds, labels)
 }
 
 #[cfg(test)]
@@ -153,39 +158,66 @@ mod tests {
     #[test]
     fn floors_to_default_upper_when_below() {
         let cfg = config(TemperatureType::Celsius);
-        let (max, labels) = adjust_temp_data_point(40.0, None, &cfg);
-        assert_eq!(max, 100.0);
+        let (bounds, labels) = adjust_temp_data_point(40.0, None, None, &cfg);
+        assert_eq!(bounds, AxisBound::Max(100.0));
         assert_eq!(labels, ["0°C", "50°C", "100°C"]);
     }
 
     #[test]
     fn keeps_actual_max_when_above_default() {
         let cfg = config(TemperatureType::Celsius);
-        let (max, labels) = adjust_temp_data_point(120.0, None, &cfg);
-        assert_eq!(max, 120.0);
+        let (bounds, labels) = adjust_temp_data_point(120.0, None, None, &cfg);
+        assert_eq!(bounds, AxisBound::Max(120.0));
         assert_eq!(labels, ["0°C", "60°C", "120°C"]);
+    }
+
+    #[test]
+    fn lower_limit_keeps_adaptive_upper_bound() {
+        let cfg = config(TemperatureType::Celsius);
+        let (bounds, labels) = adjust_temp_data_point(40.0, Some(30.0), None, &cfg);
+        assert_eq!(bounds, AxisBound::Range(30.0, 100.0));
+        assert_eq!(labels, ["30°C", "65°C", "100°C"]);
+    }
+
+    #[test]
+    fn lower_limit_can_be_negative() {
+        let cfg = config(TemperatureType::Celsius);
+        let (bounds, labels) = adjust_temp_data_point(40.0, Some(-20.0), None, &cfg);
+        assert_eq!(bounds, AxisBound::Range(-20.0, 100.0));
+        assert_eq!(labels, ["-20°C", "40°C", "100°C"]);
     }
 
     #[test]
     fn upper_limit_overrides_actual_max() {
         let cfg = config(TemperatureType::Celsius);
-        let (max, labels) = adjust_temp_data_point(150.0, Some(80.0), &cfg);
-        assert_eq!(max, 80.0);
+        let (bounds, labels) = adjust_temp_data_point(150.0, None, Some(80.0), &cfg);
+        assert_eq!(bounds, AxisBound::Max(80.0));
         assert_eq!(labels, ["0°C", "40°C", "80°C"]);
+    }
+
+    #[test]
+    fn both_limits_define_a_range() {
+        let cfg = config(TemperatureType::Celsius);
+        let (bounds, labels) = adjust_temp_data_point(150.0, Some(30.0), Some(80.0), &cfg);
+        assert_eq!(bounds, AxisBound::Range(30.0, 80.0));
+        assert_eq!(labels, ["30°C", "55°C", "80°C"]);
     }
 
     #[test]
     fn fahrenheit_default_is_212() {
         let cfg = config(TemperatureType::Fahrenheit);
-        let (max, labels) = adjust_temp_data_point(100.0, None, &cfg);
-        assert_eq!(max, 212.0);
+        let (bounds, labels) = adjust_temp_data_point(100.0, None, None, &cfg);
+        assert_eq!(bounds, AxisBound::Max(212.0));
         assert_eq!(labels, ["0°F", "106°F", "212°F"]);
     }
 
     #[test]
     fn kelvin_default_is_373() {
         let cfg = config(TemperatureType::Kelvin);
-        let (max, labels) = adjust_temp_data_point(100.0, None, &cfg);
+        let (bounds, labels) = adjust_temp_data_point(100.0, None, None, &cfg);
+        let AxisBound::Max(max) = bounds else {
+            panic!("expected a maximum bound");
+        };
         assert!((max - 373.15).abs() < 1e-3);
         assert_eq!(labels, ["0K", "187K", "374K"]);
     }

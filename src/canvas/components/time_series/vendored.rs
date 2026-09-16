@@ -39,8 +39,7 @@ pub const DEFAULT_LEGEND_CONSTRAINTS: LegendConstraints = LegendConstraints {
 /// A single graph point.
 pub type Point = (f64, f64);
 
-/// An axis bound type. Allows us to save a f64 since we know that we are
-/// usually bound from some values [0.0, a], or [-b, 0.0].
+/// An axis bound type.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum AxisBound {
     /// Just 0.
@@ -50,6 +49,8 @@ pub enum AxisBound {
     Min(f64),
     /// Bound by 0 and a max value.
     Max(f64),
+    /// Bound by minimum and maximum values.
+    Range(f64, f64),
 }
 
 impl AxisBound {
@@ -58,6 +59,7 @@ impl AxisBound {
             AxisBound::Zero => [0.0, 0.0],
             AxisBound::Min(min) => [*min, 0.0],
             AxisBound::Max(max) => [0.0, *max],
+            AxisBound::Range(min, max) => [*min, *max],
         }
     }
 }

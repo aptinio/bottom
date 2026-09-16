@@ -278,6 +278,33 @@ pub(crate) fn get_or_create_config(config_path: Option<&Path>) -> anyhow::Result
     }
 }
 
+fn get_temperature_graph_limits(config: &Config) -> OptionResult<(Option<f64>, Option<f64>)> {
+    let Some(config) = config.temperature_graph.as_ref() else {
+        return Ok((None, None));
+    };
+
+    for (name, value) in [
+        ("temperature_graph.min_temp", config.min_temp),
+        ("temperature_graph.max_temp", config.max_temp),
+    ] {
+        if value.is_some_and(|value| !value.is_finite()) {
+            return Err(OptionError::config(format!(
+                "'{name}' must be a finite number."
+            )));
+        }
+    }
+
+    if let Some(max_temp) = config.max_temp
+        && config.min_temp.unwrap_or(0.0) >= max_temp
+    {
+        return Err(OptionError::config(
+            "'temperature_graph.max_temp' must be greater than the graph's lower bound.",
+        ));
+    }
+
+    Ok((config.min_temp, config.max_temp))
+}
+
 /// Initialize the app.
 pub(crate) fn init_app(args: BottomArgs, config: Config) -> Result<(App, BottomLayout, Styles)> {
     use BottomWidgetType::*;
@@ -287,6 +314,7 @@ pub(crate) fn init_app(args: BottomArgs, config: Config) -> Result<(App, BottomL
     let args = &args;
     let config = &config;
 
+    let (min_temp, max_temp) = get_temperature_graph_limits(config)?;
     let styling = Styles::new(args, config)?;
 
     let (widget_layout, default_widget_id, default_widget_type_option) =
@@ -682,14 +710,14 @@ pub(crate) fn init_app(args: BottomArgs, config: Config) -> Result<(App, BottomL
                             );
                         }
                         TempGraph => {
-                            let upper_limit = config
-                                .temperature_graph
-                                .as_ref()
-                                .and_then(|cfg| cfg.max_temp)
-                                .map(|v| v as f32);
                             temp_graph_state_map.insert(
                                 widget.widget_id,
-                                TempGraphWidgetState::new(ts_config, autohide_timer, upper_limit),
+                                TempGraphWidgetState::new(
+                                    ts_config,
+                                    autohide_timer,
+                                    min_temp,
+                                    max_temp,
+                                ),
                             );
                         }
                         DiskIoGraph => {
@@ -1523,6 +1551,36 @@ mod test {
         assert_eq!(
             parse_legend_position(None, Some(&bad_cfg), None, setting, None),
             Err(OptionError::invalid_config_value(setting))
+        );
+    }
+
+    #[test]
+    fn validates_temperature_graph_limits() {
+        let config = toml_edit::de::from_str(
+            r#"
+            [temperature_graph]
+            min_temp = 30.0
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            get_temperature_graph_limits(&config),
+            Ok((Some(30.0), None))
+        );
+
+        let config = toml_edit::de::from_str(
+            r#"
+            [temperature_graph]
+            min_temp = 80.0
+            max_temp = 80.0
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            get_temperature_graph_limits(&config),
+            Err(OptionError::config(
+                "'temperature_graph.max_temp' must be greater than the graph's lower bound.",
+            ))
         );
     }
 

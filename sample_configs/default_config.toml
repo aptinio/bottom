@@ -348,6 +348,10 @@
 # Where to place the legend for the temperature graph widget. One of "none", "top-left", "top", "top-right", "left", "right", "bottom-left", "bottom", "bottom-right".
 #legend_position = "top-right"
 
+# A lower temperature value for the graph; entries lower than this will be hidden. If not set,
+# the graph starts at zero. Is in the configured temperature unit.
+#min_temp = 0.0
+
 # An upper temperature value for the graph; entries higher than this will be hidden. If not set,
 # there is no limit. Is in the configured temperature unit.
 #max_temp = 100.0

@@ -12,14 +12,23 @@ The location of the legend can be set with `legend_position`. Valid values are `
 legend_position = "top-right"
 ```
 
-## Upper Limit
+## Temperature Limits
 
-By default, the y-axis is bounded at 100°C (or the equivalent in the configured temperature unit) and grows
-automatically if a reading exceeds that. An explicit upper bound can be set with `max_temp` (uses the same unit as
-the configured temperature unit). Sensor readings above this value will be drawn off the chart.
+By default, the y-axis starts at zero and is bounded at 100°C (or the equivalent in the configured temperature unit),
+growing automatically if a reading exceeds that. Set `min_temp` to use a fixed lower bound while keeping the upper
+bound adaptive. Both settings use the configured temperature unit.
 
 ```toml
 [temperature_graph]
+min_temp = 30.0
+```
+
+An explicit upper bound can be set with `max_temp`. If both bounds are set, `min_temp` must be less than `max_temp`.
+Sensor readings outside the configured bounds will be drawn off the chart.
+
+```toml
+[temperature_graph]
+min_temp = 30.0
 max_temp = 90.0
 ```
 

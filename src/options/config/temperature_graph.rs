@@ -14,6 +14,13 @@ pub(crate) struct TempGraphConfig {
     #[serde(default)]
     pub(crate) legend_position: Option<String>,
 
+    /// A lower temperature value for the graph; entries lower than this will
+    /// be hidden. If not set, the graph starts at zero.
+    ///
+    /// Is in the configured temperature unit.
+    #[serde(default)]
+    pub(crate) min_temp: Option<f64>,
+
     /// An upper temperature value for the graph; entries higher than this will
     /// be hidden. If not set, there is no limit.
     ///

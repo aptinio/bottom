@@ -1458,6 +1458,15 @@
           "format": "double",
           "default": null
         },
+        "min_temp": {
+          "description": "A lower temperature value for the graph; entries lower than this will\nbe hidden. If not set, the graph starts at zero.\n\nIs in the configured temperature unit.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
         "sensor_filter": {
           "description": "A filter over the sensor names.",
           "anyOf": [
